@@ -1,0 +1,24 @@
+- After you install the raspbian OS to your Pi SD card;
+- Please copy the files what we provided to your SD card;
+
+boot/config.txt
+boot/bcm2708-rpi-0-w.dtb
+boot/bcm2708-rpi-0.dtb
+boot/bcm2709-rpi-2-b.dtb
+boot/bcm2710-rpi-3-b.dtb
+boot/bcm2708-rpi-b-plus.dtb
+boot/bcm2708-rpi-cm.dtb
+boot/bcm2710-rpi-cm3.dtb
+boot/overlays/mzdpi.dtbo (Pay attention to the position where you put)
+
+- Your Screen Will Work Perfectly.
+
+
+
+
+If the screen has a bunch of vertical lines scattered throughout the display,please do the following:
+1. sudo vi /boot/config.txt
+2. Find the line with "dpi_output_format".
+3. Change the value FROM "0x07f003" to "0x07f213"
+4. Save/close/reboot
+This inverts the pixel clock, which does the trick. No more black lines!
