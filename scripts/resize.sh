@@ -60,3 +60,5 @@ fi
 
 # Then crop...
 ffmpeg -i ${TMP} -movflags faststart -pix_fmt yuv420p -filter:v "crop=${CROP}" ${OUT}
+# Remove tmp file
+rm ${TMP}
