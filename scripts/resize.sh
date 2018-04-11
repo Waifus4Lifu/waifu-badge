@@ -42,7 +42,7 @@ else
 fi
 
 # Then perform a first resizing
-ffmpeg -i ${FILE} -vf scale=${SCALE} ${TMP}
+ffmpeg -i ${FILE} -movflags faststart -pix_fmt yuv420p -vf scale=${SCALE} ${TMP}
 
 # Now get the temporary video size
 eval $(ffprobe -v error -of flat=s=_ -select_streams v:0 -show_entries stream=height,width ${TMP})
@@ -59,4 +59,4 @@ elif [ "z${CROP_SIDE}" = "zw" ] ; then
 fi
 
 # Then crop...
-ffmpeg -i ${TMP} -filter:v "crop=${CROP}" ${OUT}
+ffmpeg -i ${TMP} -movflags faststart -pix_fmt yuv420p -filter:v "crop=${CROP}" ${OUT}
