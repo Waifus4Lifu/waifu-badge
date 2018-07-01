@@ -1,0 +1,4 @@
+beacontools
+evdev
+beacontools[scan]
+RPi.GPIO
