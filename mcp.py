@@ -254,7 +254,7 @@ async def event_handler():
             log.debug("Touch event down: x={x} y={y} quad={quad}".format(x=x, y=y, quad=quad))
             log.debug("Previous state: {0}".format(state))
 
-            if quad and not state['hacked']:
+            if not state['hacked'] and not state['vibe']:
                 await haptic_feedback()
             if state['vibe']:
                 log.info('Showing vibration active animation')
