@@ -4,19 +4,50 @@ import logging as log
 import time
 import atexit
 import asyncio
+import binascii
 from datetime import datetime
 import subprocess
 import evdev
+import yaml
 from evdev import InputDevice, categorize, ecodes
 import RPi.GPIO as GPIO
 from beacontools import BeaconScanner, IBeaconFilter
 
-if os.path.isfile('/badge/debug'):
+def name_to_hex(name):
+    name = name + "                "
+    name = name[:16]
+    hex_name = str(binascii.hexlify(bytes(name, 'utf-8')))[2:-1]
+    index = 0
+    formatted_hex_name = ""
+    for character in hex_name:
+        formatted_hex_name = formatted_hex_name + character
+        if index % 2 == 1:
+            formatted_hex_name = formatted_hex_name + " "
+        index += 1
+    return formatted_hex_name[:-1]
+
+def number_to_hex(number):
+    number = str(hex(number))[2:]
+    number = "0000" + number
+    number = number[-4:-2] + " " + number[-2:]
+    return number
+
+with open('/badge/config.yaml', "r") as f:
+    config = yaml.load(f)
+
+try:
+    with open(os.path.join(sys.path[0], 'hacks.yaml'), "r") as f:
+        hacks = yaml.load(f)
+except FileNotFoundError:
+    hacks = {}
+
+if config['debug']:
     log.basicConfig(format="[%(asctime)s] [%(levelname)s] %(message)s", level=log.DEBUG, filename='/badge/logs/mcp.log')
 else:
     log.basicConfig(format="[%(asctime)s] [%(levelname)s] %(message)s", level=log.INFO, filename='/badge/logs/mcp.log')
 
 log.info("Script started")
+log.debug(config)
 
 # Global state dict
 state = {
@@ -78,10 +109,33 @@ async def waifus_handler():
 
 def validate_beacon(bt_addr, rssi, packet, additional_info):
     global state
-    if additional_info['minor'] == 16:
-        # TODO: Make this log entry useful
-        log.info("We've been hacked! Hacker info: {0}".format(additional_info))
-        state['hacked'] = True
+    minor = additional_info['minor']
+    major = additional_info['major']
+    if minor == 1337:
+        uuid = additional_info['uuid'].replace('-', '')
+        name = bytes.fromhex(uuid).decode()
+        if name.replace(' ', '') == config['username'].replace(' ', ''):
+            print("Ignoring own hack: {} {}".format(name, major))
+            return
+        if name not in hacks:
+            hacks[name] = major
+            with open(os.path.join(sys.path[0], 'hacks.yaml'), 'w') as f:
+                yaml.dump(hacks, f, default_flow_style=False)
+            print("Detected new hack: {} {}".format(name, major))
+            state['hacked'] = True
+        else:
+            if additional_info['major'] > hacks[name]:
+                hacks[name] = major
+                with open(os.path.join(sys.path[0], 'hacks.yaml'), 'w') as f:
+                    yaml.dump(hacks, f, default_flow_style=False)
+                print("Detected new hack: {} {}".format(name, major))
+                state['hacked'] = True
+            else:
+                print("Ignoring previous hack: {} {}".format(name, major))
+        if config['hack']['can_hack'] == False:
+            config['hack']['can_hack'] = True
+            with open(os.path.join(sys.path[0], 'config.yaml'), 'w') as f:
+                yaml.dump(config, f, default_flow_style=False)
     return
 
 async def hack_handler():
@@ -129,7 +183,15 @@ async def hack_handler():
             # TODO: Sending beacon needs our handle and hack init counts
             log.info('Sending hack beacon')
             path = os.path.join(sys.path[0], 'scripts','send_beacon.sh')
-            hack_process = proc_open('sudo {0}'.format(path)) # TODO: Make this relative instead of absolute
+            hex_name = name_to_hex(config['username'])
+            if 'self' in hacks:
+                hacks['self'] = hacks['self'] + 1
+            else:
+                hacks['self'] = 1
+            hex_number = number_to_hex(hacks['self'])
+            with open(os.path.join(sys.path[0], 'hacks.yaml'), 'w') as f:
+                yaml.dump(hacks, f, default_flow_style=False)
+            hack_process = subprocess.Popen(['sudo', path, hex_name, hex_number])
             while hack_process.poll() == None:
                 await asyncio.sleep(.1)
             scanner = BeaconScanner(validate_beacon)
@@ -321,7 +383,10 @@ async def event_handler():
                     await asyncio.sleep(3)
                     state['waifus'] = False
                 elif quad == 4:
-                    state['hack_screen'] = True
+                    if config['hack']['can_hack']:
+                        state['hack_screen'] = True
+                    else:
+                        log.info('Hack disabled')
 
             log.debug("New state: {0}".format(state))
             # Clear out x and y
