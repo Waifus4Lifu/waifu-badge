@@ -73,6 +73,9 @@ tap_counts = {
     'hacked': 0         # Counter to disable hacked state
 }
 
+name = None
+major = None
+
 # Kill all omxplayer instances on exit
 atexit.register(subprocess.call, ['killall', '/usr/bin/omxplayer.bin'])
 
@@ -109,6 +112,8 @@ async def waifus_handler():
 
 def validate_beacon(bt_addr, rssi, packet, additional_info):
     global state
+    global name
+    global major
     minor = additional_info['minor']
     major = additional_info['major']
     if minor == 1337:
@@ -148,10 +153,16 @@ async def hack_handler():
         if not state['hacked']:
             await asyncio.sleep(.1)
         else:
+            scanner.stop()
             log.info('Starting hack animation')
             path = os.path.join(sys.path[0], 'media','waifu_hack.mp4')
             process = proc_open('omxplayer --loop --no-osd --layer 5 {0}'.format(path))
-            tap_count['hacked'] = 0
+            tap_counts['hacked'] = 0
+            path = os.path.join(sys.path[0], 'scripts','send_beacon_start.sh')
+            hex_name = name_to_hex(name)
+            hex_number = number_to_hex(major)
+            hack_start_process = subprocess.Popen(['sudo', path, hex_name, hex_number])
+
             while process.poll() == None:
                 GPIO.output(18,GPIO.HIGH)
                 await asyncio.sleep(.5)
@@ -161,6 +172,13 @@ async def hack_handler():
                 if not state['hacked']:
                     process.communicate(b'q')
                     log.info('Terminated hack animation and vibration (#1)')
+                    await asyncio.sleep(5)
+                    path = os.path.join(sys.path[0], 'scripts','send_beacon_end.sh')
+                    hack_end_process = subprocess.Popen(['sudo', path])
+                    await asyncio.sleep(5)
+                    scanner = BeaconScanner(validate_beacon)
+                    scanner.start()
+                    log.info('Restarted beacon scanner')
                     break
 
                 await asyncio.sleep(.2)
@@ -172,6 +190,13 @@ async def hack_handler():
                 if not state['hacked']:
                     process.communicate(b'q')
                     log.info('Terminated hack animation and vibration (#2)')
+                    await asyncio.sleep(5)
+                    path = os.path.join(sys.path[0], 'scripts','send_beacon_end.sh')
+                    hack_end_process = subprocess.Popen(['sudo', path])
+                    await asyncio.sleep(5)
+                    scanner = BeaconScanner(validate_beacon)
+                    scanner.start()
+                    log.info('Restarted beacon scanner')
                     break
 
                 await asyncio.sleep(.5)
@@ -180,7 +205,6 @@ async def hack_handler():
             path = os.path.join(sys.path[0], 'media','hacking.mp4')
             hack_video = proc_open('omxplayer --loop --no-osd --layer 2 --blank {0}'.format(path))
             scanner.stop()
-            # TODO: Sending beacon needs our handle and hack init counts
             log.info('Sending hack beacon')
             path = os.path.join(sys.path[0], 'scripts','send_beacon.sh')
             hex_name = name_to_hex(config['username'])
@@ -233,7 +257,7 @@ async def emulationstation_handler():
             await asyncio.sleep(.1)
         else:
             log.info('Starting emulationstation')
-            process = proc_open('emulationstation')
+            process = subprocess.Popen(['sudo', '-u', 'pi', 'emulationstation'])
             while process.poll() == None:
                     if not state['emu']:
                         log.debug('Killing all retroarch processes')
@@ -272,7 +296,14 @@ async def slideshow_handler():
                 file = files[index]
                 path = os.path.join('/badge/slideshow', file)
                 log.debug('Playing: {0}'.format(path))
-                process = proc_open('omxplayer --layer 2 --aspect-mode fill {}'.format(path))
+
+                loop_delay = config['slideshow']['loop_duration']
+                loop_delay = int(loop_delay)
+                if loop_delay == 0:
+                    process = proc_open('omxplayer --layer 2 --no-osd --aspect-mode fill {}'.format(path))
+                else:
+                    process = proc_open('omxplayer --layer 2 --no-osd --loop --aspect-mode fill {}'.format(path))
+                start_time = datetime.now()
                 while process.poll() == None:
                     if not state['slideshow']:
                         process.communicate(b'q')
@@ -289,6 +320,12 @@ async def slideshow_handler():
                         slideshow_controls['previous'] = False
                         index -= 2
                         break
+                    if loop_delay > 0:
+                        delta = datetime.now() - start_time
+                        if delta.total_seconds() >= loop_delay:
+                            log.info('Slideshow transition time reached')
+                            process.communicate(b'q')
+                            break
                     await asyncio.sleep(.05)
                 index += 1
 
@@ -325,9 +362,9 @@ async def event_handler():
                 proc_open('{0} org.vibe_active setalpha 255'.format(path))
 
             if state['hacked']:
-                tap_count['hacked'] += 1
-                log.debug('Trying to deactivate hack, tap #{0}'.format(tap_count['hacked']))
-                if tap_count['hacked'] > 5:
+                tap_counts['hacked'] += 1
+                log.debug('Trying to deactivate hack, tap #{0}'.format(tap_counts['hacked']))
+                if tap_counts['hacked'] > 5:
                     log.info('Hack deactivated')
                     state['hacked'] = False
         elif event.type == ecodes.EV_KEY and event.value == 0:

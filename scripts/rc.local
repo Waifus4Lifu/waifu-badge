@@ -1,5 +1,5 @@
 #!/bin/sh -e
-sudo -u pi python3.5 /home/pi/waifu-badge/scripts/convert.sh
-sudo -u pi python3.5 /home/pi/waifu-badge/mcp.py &
+sudo bash /home/pi/waifu-badge/scripts/convert.sh
+sudo python3.5 /home/pi/waifu-badge/mcp.py &
 exit 0
 

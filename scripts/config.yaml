@@ -3,6 +3,5 @@ hack:
     can_hack: true
     can_be_hacked: true
 slideshow:
-  controls_enabled: true
   loop_duration: 5
-username: Hungry
+username: Scrub
